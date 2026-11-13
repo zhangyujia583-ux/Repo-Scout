@@ -1,8 +1,10 @@
 import "server-only";
 
 import { connection } from "next/server";
+import { t } from "@/lib/copy";
 import { buildGithubSearchUrl, buildSearchQuery, sinceDate, type Filters } from "@/lib/filters";
 import { formatCount, formatDay, formatReset } from "@/lib/format";
+import type { Locale } from "@/lib/locale";
 import { toRepoCard, toScoreInput, type RepoDraft } from "@/lib/present";
 import { compareWatchScore, scoreRepository } from "@/lib/score";
 import type { DiscoverFailure, DiscoverResult, RateLimitInfo } from "@/lib/types";
@@ -57,6 +59,7 @@ function failure(
     authenticated: boolean;
     query: string;
     resetAt?: string | null;
+    locale?: Locale;
   },
 ): DiscoverFailure {
   const resetAt = extras.resetAt ?? null;
@@ -65,7 +68,7 @@ function failure(
     error,
     message,
     resetAt,
-    resetLabel: resetAt ? formatReset(resetAt) : null,
+    resetLabel: resetAt ? formatReset(resetAt, extras.locale ?? "en") : null,
     authenticated: extras.authenticated,
     query: extras.query,
   };
@@ -231,6 +234,7 @@ async function enrichReadmes(
 
 function summaryCopy(options: {
   filters: Filters;
+  locale: Locale;
   shown: number;
   totalCount: number;
   authenticated: boolean;
@@ -240,34 +244,32 @@ function summaryCopy(options: {
   rateLimit: RateLimitInfo;
   now: Date;
 }) {
-  const since = formatDay(sinceDate(options.filters.windowDays, options.now));
-  const noun = options.shown === 1 ? "repository" : "repositories";
+  const copy = t(options.locale);
+  const since = formatDay(sinceDate(options.filters.windowDays, options.now), options.locale);
   const quota =
     options.rateLimit.remaining !== null && options.rateLimit.limit !== null
-      ? `Search quota: ${options.rateLimit.remaining} of ${options.rateLimit.limit} left in this window.`
+      ? copy.quota(options.rateLimit.remaining, options.rateLimit.limit)
       : null;
 
   return {
-    heading: `${options.shown} ${noun} to consider`,
-    detail: `Created on or after ${since}. GitHub reports about ${formatCount(options.totalCount)} matches. Repo Scout re-ranks the most-starred page it returned, instead of trusting star count alone.`,
-    readmeNote: options.readmeEnriched
-      ? "README length is included in the documentation score."
-      : "README length is not checked without a token. Documentation is scored from the description, topics, and homepage, then scaled so that missing check is not treated as a missing README.",
+    heading: copy.heading(options.shown),
+    detail: copy.detail(since, formatCount(options.totalCount, options.locale)),
+    readmeNote: options.readmeEnriched ? copy.readmeOn : copy.readmeOff,
     quotaNote: quota,
-    authNote: options.authenticated
-      ? "GitHub token connected. Higher search limits are active."
-      : "No token connected. Unauthenticated search allows about 10 requests per minute.",
-    incompleteNote: options.incomplete
-      ? "GitHub marked this search as incomplete, so the page may be missing matches."
-      : null,
+    authNote: options.authenticated ? copy.authOn : copy.authOff,
+    incompleteNote: options.incomplete ? copy.incomplete : null,
     query: options.query,
   };
 }
 
-export async function discoverRepositories(filters: Filters): Promise<DiscoverResult> {
+export async function discoverRepositories(
+  filters: Filters,
+  locale: Locale = "en",
+): Promise<DiscoverResult> {
   await connection();
   const now = new Date();
   const query = buildSearchQuery(filters, now);
+  const copy = t(locale);
   const { headers, authenticated } = githubHeaders();
 
   let response: Response;
@@ -281,13 +283,11 @@ export async function discoverRepositories(filters: Filters): Promise<DiscoverRe
     const aborted =
       error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("GitHub search request failed", aborted ? error.name : "network");
-    return failure(
-      "network",
-      aborted
-        ? "The GitHub search request timed out before Repo Scout received a result."
-        : "Repo Scout could not reach the GitHub API. Check the connection and try again.",
-      { authenticated, query },
-    );
+    return failure("network", aborted ? copy.timeout : copy.network, {
+      authenticated,
+      query,
+      locale,
+    });
   }
 
   const rateLimit = readRateLimit(response);
@@ -303,36 +303,34 @@ export async function discoverRepositories(filters: Filters): Promise<DiscoverRe
   const apiMessage = safeMessage(payload.message, "");
 
   if (response.status === 401 || apiMessage.toLowerCase().includes("bad credentials")) {
-    return failure(
-      "invalid_token",
-      "GitHub rejected the token in GITHUB_TOKEN. Replace it with a valid token that can read public repositories, or remove it to continue without one.",
-      { authenticated, query, resetAt: rateLimit.resetAt },
-    );
+    return failure("invalid_token", copy.badToken, {
+      authenticated,
+      query,
+      resetAt: rateLimit.resetAt,
+      locale,
+    });
   }
 
   if (isRateLimit(response.status, apiMessage, rateLimit.remaining)) {
-    return failure(
-      "rate_limited",
-      authenticated
-        ? "GitHub rate-limited this token. Wait for the window to reset, then try again."
-        : "GitHub rate-limited unauthenticated search from this server.",
-      { authenticated, query, resetAt: rateLimit.resetAt },
-    );
+    return failure("rate_limited", authenticated ? copy.rateAuth : copy.rateAnon, {
+      authenticated,
+      query,
+      resetAt: rateLimit.resetAt,
+      locale,
+    });
   }
 
   if (!response.ok || !Array.isArray(payload.items)) {
     console.error(`GitHub search failed with status ${response.status}`);
     const message =
       response.status === 422
-        ? "GitHub rejected this search. Try a shorter keyword or a simpler topic."
-        : safeMessage(
-            payload.message,
-            `GitHub search failed with status ${response.status}. Try again in a moment.`,
-          );
+        ? copy.rejected
+        : safeMessage(payload.message, copy.statusFailed(response.status));
     return failure("github_error", message, {
       authenticated,
       query,
       resetAt: rateLimit.resetAt,
+      locale,
     });
   }
 
@@ -345,7 +343,9 @@ export async function discoverRepositories(filters: Filters): Promise<DiscoverRe
   }
 
   const repos = drafts
-    .map((draft) => toRepoCard(draft, scoreRepository(toScoreInput(draft), now), now))
+    .map((draft) =>
+      toRepoCard(draft, scoreRepository(toScoreInput(draft), now, locale), now, locale),
+    )
     .sort((a, b) =>
       compareWatchScore(
         { fullName: a.fullName, stars: a.stars, scoring: { score: a.score } },
@@ -363,6 +363,7 @@ export async function discoverRepositories(filters: Filters): Promise<DiscoverRe
     readmeEnriched,
     summary: summaryCopy({
       filters,
+      locale,
       shown: repos.length,
       totalCount,
       authenticated,

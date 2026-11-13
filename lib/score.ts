@@ -1,3 +1,5 @@
+import type { Locale } from "@/lib/locale";
+
 /**
  * Watch score for a public GitHub repository.
  *
@@ -259,35 +261,75 @@ export function communityPoints(forks: number, stars: number): number {
   return clamp(Math.min(volume, 4) + bonus, 0, SCORE_WEIGHTS.community);
 }
 
-function ageDetail(ageDays: number): string {
-  if (ageDays < 1) return "Created today";
+const FACTOR_COPY = {
+  en: {
+    velocity: { label: "Star velocity", short: "Velocity" },
+    recency: { label: "Recency", short: "Recency" },
+    activity: { label: "Recent activity", short: "Activity" },
+    docs: { label: "Documentation", short: "Docs" },
+    license: { label: "License", short: "License" },
+    community: { label: "Community", short: "Forks" },
+  },
+  zh: {
+    velocity: { label: "Star 增速", short: "增速" },
+    recency: { label: "新近程度", short: "新近" },
+    activity: { label: "最近活跃", short: "活跃" },
+    docs: { label: "文档", short: "文档" },
+    license: { label: "许可证", short: "许可" },
+    community: { label: "社区", short: "Fork" },
+  },
+} as const;
+
+function licenseName(license: LicenseAssessment, locale: Locale): string | null {
+  if (!license.label) return null;
+  if (locale === "zh" && license.label === "Other") return "其他";
+  return license.label;
+}
+
+function ageDetail(ageDays: number, locale: Locale): string {
   const days = Math.max(1, Math.round(ageDays));
+  if (locale === "zh") {
+    if (ageDays < 1) return "今天创建";
+    return days === 1 ? "1 天前创建" : `${days} 天前创建`;
+  }
+  if (ageDays < 1) return "Created today";
   return days === 1 ? "Created 1 day ago" : `Created ${days} days ago`;
 }
 
-function pushDetail(daysSincePush: number): string {
-  if (daysSincePush < 1) return "Pushed today";
+function pushDetail(daysSincePush: number, locale: Locale): string {
   const days = Math.max(1, Math.round(daysSincePush));
+  if (locale === "zh") {
+    if (daysSincePush < 1) return "今天有推送";
+    return days === 1 ? "1 天前有推送" : `${days} 天前有推送`;
+  }
+  if (daysSincePush < 1) return "Pushed today";
   return days === 1 ? "Pushed 1 day ago" : `Pushed ${days} days ago`;
 }
 
-function docsDetail(input: ScoreInput, docs: DocsAssessment): string {
+function docsDetail(input: ScoreInput, docs: DocsAssessment, locale: Locale): string {
   if (!docs.readmeKnown) {
-    return "README not checked. Description, topics, and homepage were scaled so missing data is not treated as a missing README.";
+    return locale === "zh"
+      ? "未检查 README。简介、topics 和主页已按比例放大，避免把未检查当成没有 README。"
+      : "README not checked. Description, topics, and homepage were scaled so missing data is not treated as a missing README.";
   }
-  if (!docs.hasAnyReadme) return "No README found";
-  if (!docs.hasSubstantialReadme) return "README is short";
+  if (!docs.hasAnyReadme) return locale === "zh" ? "没有 README" : "No README found";
+  if (!docs.hasSubstantialReadme) return locale === "zh" ? "README 较短" : "README is short";
   const kilobytes = ((input.readmeChars ?? 0) / 1000).toFixed(1);
-  return `README about ${kilobytes} KB`;
+  return locale === "zh" ? `README 约 ${kilobytes} KB` : `README about ${kilobytes} KB`;
 }
 
-function forkDetail(forks: number): string {
+function forkDetail(forks: number, locale: Locale): string {
+  if (locale === "zh") {
+    if (forks <= 0) return "还没有 fork";
+    return forks === 1 ? "1 个 fork" : `${forks} 个 fork`;
+  }
   if (forks <= 0) return "No forks yet";
   return forks === 1 ? "1 fork" : `${forks} forks`;
 }
 
-function joinClauses(parts: string[]): string {
+function joinClauses(parts: string[], locale: Locale): string {
   if (parts.length === 1) return parts[0];
+  if (locale === "zh") return parts.join("，");
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 }
@@ -297,52 +339,66 @@ function buildReason(
   metrics: { starsPerDay: number; ageDays: number; daysSincePush: number },
   docs: DocsAssessment,
   license: LicenseAssessment,
+  locale: Locale,
 ): string {
+  const zh = locale === "zh";
   if (input.archived) {
-    return "Archived repositories are poor candidates to watch, so the score is cut sharply even if older stars remain.";
+    return zh
+      ? "已归档的仓库不适合继续关注，即使过去的 star 还在，分数也会被大幅压低。"
+      : "Archived repositories are poor candidates to watch, so the score is cut sharply even if older stars remain.";
   }
 
+  const name = licenseName(license, locale);
   const clauses: string[] = [];
   if (metrics.starsPerDay >= 8) {
+    const rate = formatRate(metrics.starsPerDay);
     clauses.push(
-      `about ${formatRate(metrics.starsPerDay)} stars a day since it was created`,
+      zh ? `自创建以来每天约 ${rate} 个 star` : `about ${rate} stars a day since it was created`,
     );
   }
   if (metrics.daysSincePush <= 2) {
-    clauses.push("a push landed in the last two days");
+    clauses.push(zh ? "最近两天有推送" : "a push landed in the last two days");
   } else if (metrics.daysSincePush <= 7) {
-    clauses.push("it was updated this week");
+    clauses.push(zh ? "本周有更新" : "it was updated this week");
   }
-  if (license.kind === "permissive" && license.label) {
-    clauses.push(`the ${license.label} license is in place`);
-  } else if (license.kind === "copyleft" && license.label) {
-    clauses.push(`it publishes a ${license.label} license`);
+  if (license.kind === "permissive" && name) {
+    clauses.push(zh ? `已采用 ${name} 许可证` : `the ${name} license is in place`);
+  } else if (license.kind === "copyleft" && name) {
+    clauses.push(zh ? `以 ${name} 许可证发布` : `it publishes a ${name} license`);
   }
   if (docs.hasSubstantialReadme) {
-    clauses.push("the README is substantial");
+    clauses.push(zh ? "README 内容充实" : "the README is substantial");
   } else if (docs.hasAnyReadme) {
-    clauses.push("a README is present");
+    clauses.push(zh ? "已有 README" : "a README is present");
   } else if (docs.hasClearDescription) {
-    clauses.push("the description explains what it does");
+    clauses.push(zh ? "简介说明了它做什么" : "the description explains what it does");
   }
   if (metrics.ageDays <= 7 && metrics.starsPerDay < 8) {
-    clauses.push("it was created within the last week");
+    clauses.push(zh ? "创建于最近一周" : "it was created within the last week");
   } else if (metrics.ageDays <= 30 && metrics.starsPerDay < 1.5) {
-    clauses.push("it is still in its first month");
+    clauses.push(zh ? "仍处在第一个月" : "it is still in its first month");
   }
   if (metrics.starsPerDay >= 1.5 && metrics.starsPerDay < 8) {
-    clauses.push(`a steady ${formatRate(metrics.starsPerDay)} stars a day`);
+    const rate = formatRate(metrics.starsPerDay);
+    clauses.push(zh ? `每天稳定增加约 ${rate} 个 star` : `a steady ${rate} stars a day`);
   }
 
   if (clauses.length === 0) {
-    return "Thin public signals so far — few stars, little recent activity, or a missing description and license — so this stays a modest score.";
+    return zh
+      ? "目前公开信号偏少：star 不多、最近缺少活动，或缺少简介和许可证，所以分数保持在较低水平。"
+      : "Thin public signals so far — few stars, little recent activity, or a missing description and license — so this stays a modest score.";
   }
 
-  const sentence = joinClauses(clauses.slice(0, 3));
+  const sentence = joinClauses(clauses.slice(0, 3), locale);
+  if (zh) return `${sentence}。`;
   return sentence.charAt(0).toUpperCase() + sentence.slice(1) + ".";
 }
 
-export function scoreRepository(input: ScoreInput, now = new Date()): ScoreResult {
+export function scoreRepository(
+  input: ScoreInput,
+  now = new Date(),
+  locale: Locale = "en",
+): ScoreResult {
   const ageDays = Math.max(0, (now.getTime() - input.createdAt.getTime()) / DAY_MS);
   const daysSincePush = Math.max(0, (now.getTime() - input.pushedAt.getTime()) / DAY_MS);
   const rate = starsPerDay(input.stars, ageDays);
@@ -352,55 +408,56 @@ export function scoreRepository(input: ScoreInput, now = new Date()): ScoreResul
   const docs = documentationPoints(input);
   const license = describeLicense(input.license);
   const community = communityPoints(input.forks, input.stars);
+  const names = FACTOR_COPY[locale];
 
   const factors: ScoreFactor[] = [
     {
       id: "velocity",
-      label: "Star velocity",
-      short: "Velocity",
+      label: names.velocity.label,
+      short: names.velocity.short,
       points: velocity,
       max: SCORE_WEIGHTS.velocity,
-      detail: `${formatRate(rate)} stars/day`,
+      detail: locale === "zh" ? `每天 ${formatRate(rate)} 个 star` : `${formatRate(rate)} stars/day`,
     },
     {
       id: "recency",
-      label: "Recency",
-      short: "Recency",
+      label: names.recency.label,
+      short: names.recency.short,
       points: recency,
       max: SCORE_WEIGHTS.recency,
-      detail: ageDetail(ageDays),
+      detail: ageDetail(ageDays, locale),
     },
     {
       id: "activity",
-      label: "Recent activity",
-      short: "Activity",
+      label: names.activity.label,
+      short: names.activity.short,
       points: activity,
       max: SCORE_WEIGHTS.activity,
-      detail: pushDetail(daysSincePush),
+      detail: pushDetail(daysSincePush, locale),
     },
     {
       id: "docs",
-      label: "Documentation",
-      short: "Docs",
+      label: names.docs.label,
+      short: names.docs.short,
       points: docs.points,
       max: SCORE_WEIGHTS.docs,
-      detail: docsDetail(input, docs),
+      detail: docsDetail(input, docs, locale),
     },
     {
       id: "license",
-      label: "License",
-      short: "License",
+      label: names.license.label,
+      short: names.license.short,
       points: license.points,
       max: SCORE_WEIGHTS.license,
-      detail: license.label ?? "No license",
+      detail: licenseName(license, locale) ?? (locale === "zh" ? "无许可证" : "No license"),
     },
     {
       id: "community",
-      label: "Community",
-      short: "Forks",
+      label: names.community.label,
+      short: names.community.short,
       points: community,
       max: SCORE_WEIGHTS.community,
-      detail: forkDetail(Math.max(0, input.forks)),
+      detail: forkDetail(Math.max(0, input.forks), locale),
     },
   ];
 
@@ -414,7 +471,13 @@ export function scoreRepository(input: ScoreInput, now = new Date()): ScoreResul
     ageDays,
     daysSincePush,
     factors,
-    reason: buildReason(input, { starsPerDay: rate, ageDays, daysSincePush }, docs, license),
+    reason: buildReason(
+      input,
+      { starsPerDay: rate, ageDays, daysSincePush },
+      docs,
+      license,
+      locale,
+    ),
   };
 }
 

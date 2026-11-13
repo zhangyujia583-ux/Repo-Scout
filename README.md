@@ -1,5 +1,7 @@
 # Repo Scout
 
+[![CI](https://github.com/zhangyujia583-ux/Repo-Scout/actions/workflows/ci.yml/badge.svg)](https://github.com/zhangyujia583-ux/Repo-Scout/actions/workflows/ci.yml)
+
 Repo Scout helps developers find noteworthy **new** public GitHub repositories, not only the ones that are already famous.
 
 It searches the GitHub API for repositories created in the last 7, 30, or 90 days, then re-ranks that page with a watch score. Every card links to the real repository and explains, in one sentence, why it is worth a look.
@@ -14,6 +16,7 @@ A small web app for open-source discovery:
 - Filter by programming language, GitHub topic, and keyword.
 - Sort the current page by watch score, stars, star velocity, or latest push. Sorting does not issue another GitHub request.
 - Each card shows the owner, name, description, language, stars, license, and a short recommendation. The name and “View on GitHub” open the repository.
+- Switch the interface between English and 中文 with the control in the header, or open `/?lang=zh`. The watch-score sentence is written in the selected language. The numeric score does not change.
 
 GitHub chooses the candidate page: the 30 most-starred public, non-fork, non-archived matches for your query. Repo Scout then re-ranks those 30. It does not pretend to have scanned every new repository on GitHub, and it never fills the page with invented projects. If the API is rate-limited or unreachable, the page says so.
 
@@ -56,10 +59,12 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 ```bash
-npm test    # scoring, query building, and sort tests
+npm test    # scoring, query building, locale, and sort tests
 npm run lint
 npm run build
 ```
+
+GitHub Actions runs `npm test` and `npm run lint` on every push and pull request to `main`.
 
 ## Environment variables
 
@@ -103,7 +108,7 @@ Next.js, React, TypeScript, Tailwind CSS, and shadcn/ui. Tests run with Vitest.
 
 ### 它是什么
 
-应用会按时间窗口（最近 7、30 或 90 天）搜索公开仓库，再用一套「关注分」重新排序，并在每张卡片上写明推荐理由。卡片包含仓库名、所有者、简介、语言、star 数、许可证，并链接到真实的 GitHub 仓库。可以按语言、topic 和关键词筛选。
+应用会按时间窗口（最近 7、30 或 90 天）搜索公开仓库，再用一套「关注分」重新排序，并在每张卡片上写明推荐理由。卡片包含仓库名、所有者、简介、语言、star 数、许可证，并链接到真实的 GitHub 仓库。可以按语言、topic 和关键词筛选。页眉可以在 English 和中文之间切换，地址栏加上 `?lang=zh` 也会打开中文界面。关注分的数字不变，推荐理由会换成中文。
 
 GitHub 先返回该查询下 star 最多的 30 个公开、非 fork、未归档仓库，Repo Scout 再对这一页重新排序。它不会假装扫过了 GitHub 上的每一个新仓库，也不会在接口失败时编造数据。
 

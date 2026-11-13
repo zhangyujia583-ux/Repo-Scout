@@ -25,5 +25,8 @@ describe("format helpers", () => {
     expect(formatRelative(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000), now)).toBe(
       "3 days ago",
     );
+    expect(formatRelative(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000), now, "zh")).toBe(
+      "3 天前",
+    );
   });
 });

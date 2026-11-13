@@ -1,3 +1,5 @@
+import type { Locale } from "@/lib/locale";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -11,27 +13,27 @@ export function formatStars(stars: number): string {
   return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
 }
 
-export function formatCount(value: number): string {
+export function formatCount(value: number, locale: Locale = "en"): string {
   const safe = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-  return new Intl.NumberFormat("en-US").format(safe);
+  return new Intl.NumberFormat(locale === "zh" ? "zh-CN" : "en-US").format(safe);
 }
 
-export function formatDay(isoDate: string): string {
+export function formatDay(isoDate: string, locale: Locale = "en"): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   if (!year || !month || !day) return isoDate;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    month: locale === "zh" ? "long" : "short",
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-export function formatReset(iso: string): string {
+export function formatReset(iso: string, locale: Locale = "en"): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return (
-    new Intl.DateTimeFormat("en-GB", {
+    new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-GB", {
       timeZone: "UTC",
       dateStyle: "medium",
       timeStyle: "short",
@@ -39,16 +41,24 @@ export function formatReset(iso: string): string {
   );
 }
 
-export function formatRelative(then: Date, now: Date): string {
+export function formatRelative(then: Date, now: Date, locale: Locale = "en"): string {
   const delta = now.getTime() - then.getTime();
-  if (!Number.isFinite(delta) || delta < HOUR_MS) return "just now";
+  const zh = locale === "zh";
+  if (!Number.isFinite(delta) || delta < HOUR_MS) return zh ? "刚刚" : "just now";
   const hours = Math.round(delta / HOUR_MS);
-  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  if (hours < 24) {
+    if (zh) return hours === 1 ? "1 小时前" : `${hours} 小时前`;
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
   const days = Math.round(delta / DAY_MS);
-  if (days <= 1) return "yesterday";
-  if (days < 45) return `${days} days ago`;
+  if (days <= 1) return zh ? "昨天" : "yesterday";
+  if (days < 45) return zh ? `${days} 天前` : `${days} days ago`;
   const months = Math.round(days / 30.44);
-  if (months < 12) return months <= 1 ? "1 month ago" : `${months} months ago`;
+  if (months < 12) {
+    if (zh) return months <= 1 ? "1 个月前" : `${months} 个月前`;
+    return months <= 1 ? "1 month ago" : `${months} months ago`;
+  }
   const years = Math.round(days / 365.25);
+  if (zh) return years <= 1 ? "1 年前" : `${years} 年前`;
   return years <= 1 ? "1 year ago" : `${years} years ago`;
 }

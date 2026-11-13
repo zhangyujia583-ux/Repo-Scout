@@ -125,6 +125,13 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+html[lang="zh-CN"] {
+  --font-sans: var(--font-figtree), "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei",
+    sans-serif;
+  --font-heading: var(--font-figtree), "PingFang SC", "Hiragino Sans GB", "Noto Sans SC",
+    "Microsoft YaHei", sans-serif;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

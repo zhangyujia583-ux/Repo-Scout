@@ -9,23 +9,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { t } from "@/lib/copy";
+import type { Locale } from "@/lib/locale";
 import { sortRepos, type SortKey } from "@/lib/sort";
 import type { RepoCardModel, ResultsSummary } from "@/lib/types";
-
-const SORTS: { value: SortKey; label: string }[] = [
-  { value: "score", label: "Watch score" },
-  { value: "stars", label: "Stars" },
-  { value: "velocity", label: "Star velocity" },
-  { value: "updated", label: "Latest push" },
-];
 
 export function RepoBrowser({
   repos,
   summary,
+  locale,
 }: {
   repos: RepoCardModel[];
   summary: ResultsSummary;
+  locale: Locale;
 }) {
+  const copy = t(locale);
+  const sorts: { value: SortKey; label: string }[] = [
+    { value: "score", label: copy.sorts.score },
+    { value: "stars", label: copy.sorts.stars },
+    { value: "velocity", label: copy.sorts.velocity },
+    { value: "updated", label: copy.sorts.updated },
+  ];
   const [sort, setSort] = useState<SortKey>("score");
   const sorted = useMemo(() => sortRepos(repos, sort), [repos, sort]);
 
@@ -38,11 +42,11 @@ export function RepoBrowser({
         </div>
         <div className="w-full sm:w-48">
           <label htmlFor="sort" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-            Sort
+            {copy.sort}
           </label>
           <Select
             value={sort}
-            items={SORTS}
+            items={sorts}
             onValueChange={(value) => {
               if (value === "score" || value === "stars" || value === "velocity" || value === "updated") {
                 setSort(value);
@@ -53,7 +57,7 @@ export function RepoBrowser({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SORTS.map((item) => (
+              {sorts.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
                 </SelectItem>
@@ -73,13 +77,13 @@ export function RepoBrowser({
       </div>
 
       <details className="mt-3 text-xs text-muted-foreground">
-        <summary className="cursor-pointer font-medium text-foreground/80">GitHub query</summary>
+        <summary className="cursor-pointer font-medium text-foreground/80">{copy.querySummary}</summary>
         <p className="mt-2 font-mono text-[12px] leading-relaxed break-all">{summary.query}</p>
       </details>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         {sorted.map((repo) => (
-          <RepoCard key={repo.id || repo.fullName} repo={repo} />
+          <RepoCard key={repo.id || repo.fullName} repo={repo} locale={locale} />
         ))}
       </div>
     </section>

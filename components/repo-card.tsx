@@ -1,6 +1,8 @@
 import Image from "next/image";
 import { ArrowUpRight, GitFork, Star } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { t } from "@/lib/copy";
+import type { Locale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import type { RepoCardModel } from "@/lib/types";
 
@@ -10,7 +12,8 @@ function scoreClass(score: number): string {
   return "text-muted-foreground";
 }
 
-export function RepoCard({ repo }: { repo: RepoCardModel }) {
+export function RepoCard({ repo, locale }: { repo: RepoCardModel; locale: Locale }) {
+  const copy = t(locale);
   const initial = repo.ownerLogin.slice(0, 1).toUpperCase();
 
   return (
@@ -54,18 +57,18 @@ export function RepoCard({ repo }: { repo: RepoCardModel }) {
         <div className="text-right">
           <p
             className={cn("font-heading text-3xl leading-none tabular-nums", scoreClass(repo.score))}
-            aria-label={`Watch score ${repo.score} out of 100`}
+            aria-label={copy.watchScore(repo.score)}
           >
             {repo.score}
           </p>
           <p className="mt-1 text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            Watch
+            {copy.watch}
           </p>
         </div>
       </div>
 
       <p className="mt-3 line-clamp-3 min-h-16 text-sm leading-relaxed text-muted-foreground">
-        {repo.description ?? "No description provided."}
+        {repo.description ?? copy.noDescription}
       </p>
 
       <ul className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-foreground/80">
@@ -80,17 +83,17 @@ export function RepoCard({ repo }: { repo: RepoCardModel }) {
             repo.licenseLabel ? "border-border" : "border-ember/40 text-ember",
           )}
         >
-          {repo.licenseLabel ?? "No license"}
+          {repo.licenseLabel ?? copy.noLicense}
         </li>
         <li className="inline-flex items-center gap-1">
           <Star className="size-3.5 text-gold" aria-hidden="true" />
           <span>{repo.starsLabel}</span>
-          <span className="sr-only">stars</span>
+          <span className="sr-only">{copy.stars}</span>
         </li>
         <li className="inline-flex items-center gap-1">
           <GitFork className="size-3.5" aria-hidden="true" />
           <span>{repo.forks}</span>
-          <span className="sr-only">forks</span>
+          <span className="sr-only">{copy.forks}</span>
         </li>
         <li>{repo.starsPerDayLabel}</li>
         <li>{repo.pushedLabel}</li>
@@ -101,7 +104,7 @@ export function RepoCard({ repo }: { repo: RepoCardModel }) {
       ) : null}
 
       <div className="mt-4 rounded-xl bg-[oklch(0.96_0.012_85)] px-3 py-3">
-        <p className="text-[11px] font-medium tracking-[0.14em] text-ember uppercase">Why watch</p>
+        <p className="text-[11px] font-medium tracking-[0.14em] text-ember uppercase">{copy.whyWatch}</p>
         <p className="mt-1 text-sm leading-relaxed">{repo.reason}</p>
       </div>
 
@@ -148,7 +151,7 @@ export function RepoCard({ repo }: { repo: RepoCardModel }) {
           rel="noopener noreferrer"
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
         >
-          View on GitHub
+          {copy.viewOnGitHub}
           <ArrowUpRight />
         </a>
       </div>

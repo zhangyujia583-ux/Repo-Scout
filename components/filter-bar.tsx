@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { t } from "@/lib/copy";
 import {
   DEFAULT_FILTERS,
   LANGUAGES,
@@ -20,18 +21,20 @@ import {
   parseFilters,
   type DiscoverMode,
 } from "@/lib/filters";
-
-const WINDOWS = [
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "90", label: "Last 90 days" },
-] as const;
+import { parseLocale } from "@/lib/locale";
 
 export function FilterBar() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const filters = parseFilters(Object.fromEntries(params.entries()));
+  const locale = parseLocale(params.get("lang"));
+  const copy = t(locale);
+  const windows = [
+    { value: "7", label: copy.windows["7"] },
+    { value: "30", label: copy.windows["30"] },
+    { value: "90", label: copy.windows["90"] },
+  ];
   const [keyword, setKeyword] = useState(filters.query);
   const [topic, setTopic] = useState(filters.topic);
   const [syncedQuery, setSyncedQuery] = useState(filters.query);
@@ -48,13 +51,13 @@ export function FilterBar() {
   const languageItems = useMemo(() => {
     const items: { value: string; label: string }[] = LANGUAGES.map((language) => ({
       value: language.value,
-      label: language.label,
+      label: language.value === "all" ? copy.anyLanguage : language.label,
     }));
     if (!items.some((item) => item.value === filters.language)) {
       items.push({ value: filters.language, label: filters.language });
     }
     return items;
-  }, [filters.language]);
+  }, [copy.anyLanguage, filters.language]);
 
   function navigate(patch: {
     query?: string;
@@ -73,6 +76,7 @@ export function FilterBar() {
       patch.windowDays === undefined ? String(filters.windowDays) : patch.windowDays || "30";
     const nextMode = patch.mode === undefined ? filters.mode : patch.mode || "new";
     const search = new URLSearchParams();
+    if (locale === "zh") search.set("lang", "zh");
     if (nextQuery) search.set("q", nextQuery);
     if (nextTopic) search.set("topic", nextTopic);
     if (nextLanguage && nextLanguage !== "all") search.set("language", nextLanguage);
@@ -84,10 +88,7 @@ export function FilterBar() {
     });
   }
 
-  const modeHelp =
-    filters.mode === "rising"
-      ? "Rising keeps repositories created in this window that were pushed in the last 7 days and already have at least 5 stars."
-      : "New keeps every public repository created in this window. GitHub returns the most-starred matches, then Repo Scout re-ranks them.";
+  const modeHelp = filters.mode === "rising" ? copy.modeHelpRising : copy.modeHelpNew;
 
   return (
     <section className="relative z-10 -mt-10 rounded-2xl border border-border bg-card p-4 shadow-[0_22px_50px_-32px_rgba(28,48,40,0.55)] sm:p-5">
@@ -101,13 +102,13 @@ export function FilterBar() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div
             role="group"
-            aria-label="Discovery mode"
+            aria-label={copy.modeLabel}
             className="inline-flex w-fit rounded-lg bg-muted p-1"
           >
             {(
               [
-                ["new", "New"],
-                ["rising", "Rising"],
+                ["new", copy.modeNew],
+                ["rising", copy.modeRising],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -133,32 +134,32 @@ export function FilterBar() {
         <div className="grid gap-3 md:grid-cols-12">
           <div className="md:col-span-5">
             <label htmlFor="keyword" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Keyword
+              {copy.keyword}
             </label>
             <Input
               id="keyword"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="compiler, vector, lsp…"
+              placeholder={copy.keywordPlaceholder}
               autoComplete="off"
               aria-describedby="mode-help"
             />
           </div>
           <div className="md:col-span-3">
             <label htmlFor="topic" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Topic
+              {copy.topic}
             </label>
             <Input
               id="topic"
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
-              placeholder="e.g. cli"
+              placeholder={copy.topicPlaceholder}
               autoComplete="off"
             />
           </div>
           <div className="md:col-span-2">
             <label htmlFor="language" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Language
+              {copy.language}
             </label>
             <Select
               value={filters.language}
@@ -182,11 +183,11 @@ export function FilterBar() {
           </div>
           <div className="md:col-span-2">
             <label htmlFor="window" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Created
+              {copy.created}
             </label>
             <Select
               value={String(filters.windowDays)}
-              items={WINDOWS.map((item) => ({ value: item.value, label: item.label }))}
+              items={windows.map((item) => ({ value: item.value, label: item.label }))}
               onValueChange={(value) => {
                 if (!value || value === String(filters.windowDays)) return;
                 navigate({ windowDays: value });
@@ -196,7 +197,7 @@ export function FilterBar() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {WINDOWS.map((item) => (
+                {windows.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
                   </SelectItem>
@@ -207,7 +208,7 @@ export function FilterBar() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Suggested topics">
+          <div className="flex gap-2 overflow-x-auto pb-1" aria-label={copy.suggestedTopics}>
             {SUGGESTED_TOPICS.map((suggested) => {
               const active = filters.topic === suggested;
               return (
@@ -235,17 +236,20 @@ export function FilterBar() {
                 onClick={() => {
                   setKeyword("");
                   setTopic("");
+                  const search = new URLSearchParams();
+                  if (locale === "zh") search.set("lang", "zh");
+                  const qs = search.toString();
                   startTransition(() => {
-                    router.push(pathname, { scroll: false });
+                    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
                   });
                 }}
               >
-                Clear
+                {copy.clear}
               </Button>
             ) : null}
             <Button type="submit" disabled={pending}>
               <Search />
-              {pending ? "Searching…" : "Search"}
+              {pending ? copy.searching : copy.search}
             </Button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { formatRate } from "@/lib/score";
 import type { ScoreResult } from "@/lib/score";
 import { formatRelative, formatStars } from "@/lib/format";
+import type { Locale } from "@/lib/locale";
 import type { RepoCardModel } from "@/lib/types";
 
 export type RepoDraft = {
@@ -50,10 +51,16 @@ export function toScoreInput(repo: RepoDraft) {
   };
 }
 
-export function toRepoCard(repo: RepoDraft, scoring: ScoreResult, now: Date): RepoCardModel {
+export function toRepoCard(
+  repo: RepoDraft,
+  scoring: ScoreResult,
+  now: Date,
+  locale: Locale = "en",
+): RepoCardModel {
   const licenseFactor = scoring.factors.find((factor) => factor.id === "license");
-  const licenseLabel =
-    licenseFactor && licenseFactor.detail !== "No license" ? licenseFactor.detail : null;
+  const licenseLabel = licenseFactor && licenseFactor.points > 0 ? licenseFactor.detail : null;
+  const pushed = formatRelative(new Date(repo.pushedAt), now, locale);
+  const created = formatRelative(new Date(repo.createdAt), now, locale);
 
   return {
     id: repo.id,
@@ -73,10 +80,13 @@ export function toRepoCard(repo: RepoDraft, scoring: ScoreResult, now: Date): Re
     homepage: repo.homepage,
     homepageHost: hostname(repo.homepage),
     pushedAt: new Date(repo.pushedAt).getTime(),
-    pushedLabel: `Pushed ${formatRelative(new Date(repo.pushedAt), now)}`,
-    createdLabel: `Created ${formatRelative(new Date(repo.createdAt), now)}`,
+    pushedLabel: locale === "zh" ? `${pushed}推送` : `Pushed ${pushed}`,
+    createdLabel: locale === "zh" ? `${created}创建` : `Created ${created}`,
     starsPerDay: scoring.starsPerDay,
-    starsPerDayLabel: `${formatRate(scoring.starsPerDay)} stars/day`,
+    starsPerDayLabel:
+      locale === "zh"
+        ? `${formatRate(scoring.starsPerDay)} star/天`
+        : `${formatRate(scoring.starsPerDay)} stars/day`,
     score: scoring.score,
     reason: scoring.reason,
     factors: scoring.factors,
